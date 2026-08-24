@@ -13,8 +13,14 @@ dependencies = [
     "browser_cookie3>=0.19",
 ]
 
+[project.optional-dependencies]
+# Kept optional: mcp pulls in starlette/uvicorn/opentelemetry, which the plain CLI
+# has no use for. `uv tool install --editable ".[mcp]"` to get `mcenter-mcp`.
+mcp = ["mcp[cli]>=2.0"]
+
 [project.scripts]
 mcenter = "microcenter_cli.cli:main"
+mcenter-mcp = "microcenter_cli.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

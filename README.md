@@ -1,9 +1,37 @@
 # microcenter-cli
 
-CLI/library for Micro Center catalog search, drill-down, and per-store stock + price.
-No official Micro Center API exists, and no maintained MCP server or CLI for this was
-found on GitHub as of 2026-08 — this fills that gap. Verified end-to-end against
-live microcenter.com data (2026-08), not just against synthetic fixtures.
+CLI, library, and **MCP server** for Micro Center catalog search, drill-down, and
+per-store stock + price. No official Micro Center API exists, and no maintained MCP
+server or CLI for this was found on GitHub as of 2026-08 — this fills that gap.
+Verified end-to-end against live microcenter.com data, not just synthetic fixtures.
+
+Free and open source. If it's useful to you, [Sponsor this project](#support-this-project)
+— there's no paid tier, no account, no gated features; sponsorship funds maintenance
+(Micro Center's HTML *will* drift again, see [When this breaks](#when-this-breaks)),
+not access.
+
+## Agent / MCP support
+
+The flagship use case here is **agentic querying** — an agent comparing prices,
+checking stock across stores, or answering "is X in stock near me" shouldn't need a
+human driving a browser tab. `mcenter-mcp` exposes the same search/product-lookup
+capability the CLI has as MCP tools:
+
+```bash
+uv tool install --editable ".[mcp]"   # pulls in the mcp SDK (not a default dependency)
+mcenter-mcp                            # stdio transport — point your MCP client at this command
+```
+
+Tools exposed: `search_products`, `get_product`, `find_store`, `list_stores` — same
+underlying library as the CLI, same session, same rate limiting. Tested against real
+multi-step agent tasks (search → filter by stock → drill into `get_product` for the
+authoritative answer; comparing the same product's stock across several stores in one
+flow) — this is genuinely the thing a generic price-comparison tool doesn't do well,
+since most are store-agnostic and Micro Center's actual differentiator is same-day
+local pickup.
+
+The one thing MCP doesn't change: an agent still can't bootstrap its own session (see
+below) — a human runs `mcenter session interactive` once, same as for the CLI.
 
 ## Why this needs a manual step, and always will
 
@@ -82,7 +110,8 @@ doesn't expire or block anything on its own.
 ## Install
 
 ```bash
-uv tool install --editable .
+uv tool install --editable .            # CLI only
+uv tool install --editable ".[mcp]"     # CLI + MCP server (mcenter-mcp)
 ```
 
 ## Usage
@@ -150,6 +179,13 @@ the same session-aware client, for cases the structured commands don't cover yet
 also `.claude/skills/microcenter/SKILL.md` for an agent-oriented usage guide, and
 `CLAUDE.md` for the codebase's own conventions/gotchas if you're modifying it.
 
+## What this doesn't do (on purpose)
+
+No purchasing. This is read-only — search, price, stock. Automating an actual
+checkout is a much bigger jump in both technical risk (against the same
+Cloudflare-protected surface) and trust than catalog lookups, and isn't something
+this project does.
+
 ## Known limitations
 
 - **No category name lookup.** `--category` only accepts a raw `N=` facet code
@@ -177,6 +213,18 @@ selectors were calibrated, replacing an initial best-guess based on a stale refe
 scraper that turned out not to match reality at all). If you start getting
 `MicroCenterBlockedError`, that's the session step above — re-run
 `mcenter session interactive`.
+
+This is exactly the kind of thing sponsorship funds, and exactly the kind of thing
+contributions help with even more directly — if you hit a parsing break, a PR with
+the fix (following the recalibration workflow above) is worth more than a report.
+
+## Support this project
+
+Free, open source, no paid tier. If this saves you time — especially if you're
+building agent/MCP tooling on top of it — consider sponsoring to help fund the
+ongoing maintenance this kind of scraping-adjacent tool inherently needs (Micro
+Center's HTML *will* drift; someone has to notice and fix it). No sponsorship tier
+unlocks anything — everything here is already unlocked.
 
 ## Repo conventions
 

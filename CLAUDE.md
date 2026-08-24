@@ -34,6 +34,10 @@ Python patch version) than whatever's already installed locally.
   site can silently clamp out-of-range values rather than erroring.
 - `models.py` — plain dataclasses (`SearchResult`, `ProductDetail`, `SearchPage`).
 - `commands/` — one Click command per file, wired into the root group in `cli.py`.
+- `mcp_server.py` — MCP tools (`search_products`, `get_product`, `find_store`,
+  `list_stores`) as a thin wrapper over `MicroCenterClient`, nothing more. `mcp` is an
+  optional dependency (`pip install ".[mcp]"`) — don't move it to core `dependencies`,
+  it pulls in starlette/uvicorn/opentelemetry that the plain CLI has no use for.
 - `options.py` — `--store`/`-v` need to work both before *and* after the subcommand
   name (`mcenter search foo --store 121` reads far more naturally than requiring
   `mcenter --store 121 search foo`, which is all plain Click supports for group-level
