@@ -22,7 +22,7 @@ mcp = ["mcp[cli]>=2.0"]
 
 [project.scripts]
 mcenter = "microcenter_cli.cli:main"
-mcenter-mcp = "microcenter_cli.mcp_server:main"
+mcenter-mcp = "microcenter_cli.mcp_entry:main"
 
 [build-system]
 requires = ["hatchling"]

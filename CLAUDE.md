@@ -34,10 +34,21 @@ Python patch version) than whatever's already installed locally.
   site can silently clamp out-of-range values rather than erroring.
 - `models.py` — plain dataclasses (`SearchResult`, `ProductDetail`, `SearchPage`).
 - `commands/` — one Click command per file, wired into the root group in `cli.py`.
-- `mcp_server.py` — MCP tools (`search_products`, `get_product`, `find_store`,
-  `list_stores`) as a thin wrapper over `MicroCenterClient`, nothing more. `mcp` is an
-  optional dependency (`pip install ".[mcp]"`) — don't move it to core `dependencies`,
-  it pulls in starlette/uvicorn/opentelemetry that the plain CLI has no use for.
+- `mcp_server.py` — MCP tools (`search_products`, `get_product`, `get_products`,
+  `find_store`, `list_stores`) as a thin wrapper over `MicroCenterClient`, nothing
+  more. `mcp` is an optional dependency (`pip install ".[mcp]"`) — don't move it to
+  core `dependencies`, it pulls in starlette/uvicorn/opentelemetry that the plain CLI
+  has no use for. Tools returning a list must wrap it in a dict (`{"results": [...]}`)
+  -- a bare `list[...]` return serializes as one MCP content block *per item*, not one
+  block with the whole array; confirmed live, cost a real bug (`get_products`/
+  `list_stores` originally shipped broken this way, see test_mcp_server.py's
+  regression test for how to actually verify this rather than trust the Python type).
+- `mcp_entry.py` — separate, `mcp`-import-free wrapper that `mcenter-mcp` (the console
+  script) actually points at. `[project.scripts]` entry points can't be conditional on
+  an optional dependency, so `mcenter-mcp` gets installed regardless of whether
+  `.[mcp]` was requested; importing `mcp_server` directly at that point would crash
+  with a raw traceback instead of a clear "install the extra" message. If you add
+  another MCP-adjacent console script, route it through the same pattern.
 - `options.py` — `--store`/`-v` need to work both before *and* after the subcommand
   name (`mcenter search foo --store 121` reads far more naturally than requiring
   `mcenter --store 121 search foo`, which is all plain Click supports for group-level
