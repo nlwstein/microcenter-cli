@@ -42,8 +42,9 @@ class MicroCenterClient:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
+        impersonate = session.IMPERSONATE_BY_BROWSER.get(self._session.browser, "chrome")
         resp = curl_requests.get(
-            url, impersonate="chrome", cookies=cookies, headers=headers, timeout=30
+            url, impersonate=impersonate, cookies=cookies, headers=headers, timeout=30
         )
 
         if resp.status_code == 403 or parser.looks_like_challenge_page(resp.text):

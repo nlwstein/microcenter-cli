@@ -4,7 +4,11 @@ if real captured HTML (via `mcenter debug fetch`) parses differently, update
 both the fixtures here and parser.py together.
 """
 
-from microcenter_cli.parser import looks_like_challenge_page, parse_product_page, parse_search_results
+from microcenter_cli.parser import (
+    looks_like_challenge_page,
+    parse_product_page,
+    parse_search_results,
+)
 
 SEARCH_FIXTURE = """
 <html><body>

@@ -52,7 +52,10 @@ def status(ctx: Ctx) -> None:
         return
     fresh = s.is_fresh(ctx.config.session_ttl_seconds)
     state = "[green]fresh[/green]" if fresh else "[yellow]stale (may still work)[/yellow]"
-    console.print(f"session: {state}, age {s.age_seconds():.0f}s, ua={s.user_agent[:60]}...")
+    console.print(
+        f"session: {state}, age {s.age_seconds():.0f}s, browser={s.browser}, "
+        f"ua={s.user_agent[:60]}..."
+    )
 
 
 @session.command("interactive")
@@ -107,9 +110,12 @@ def import_cmd(cookie_header: str, user_agent: str) -> None:
             "make sure you copied the Cookie header from a request made *after* solving "
             "the checkbox, not before."
         )
-    s = session_store.Session(cookies=cookies, user_agent=user_agent, saved_at=time.time())
+    browser = session_store.guess_browser_from_ua(user_agent)
+    s = session_store.Session(
+        cookies=cookies, user_agent=user_agent, browser=browser, saved_at=time.time()
+    )
     session_store.save(s)
-    console.print(f"[green]Session imported.[/green] {len(cookies)} cookies cached.")
+    console.print(f"[green]Session imported.[/green] {len(cookies)} cookies cached (as {browser}).")
 
 
 @session.command("clear")

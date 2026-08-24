@@ -22,12 +22,40 @@ from .config import SESSION_FILE
 
 MICROCENTER_DOMAIN = "microcenter.com"
 
-# Chrome's UA doesn't vary by CPU arch on macOS (Apple Silicon Chrome still reports
-# "Intel Mac OS X") -- this is a known, deliberate Chrome quirk, not a bug here.
-_MAC_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-_UA_TEMPLATE = {
-    "Darwin": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/{version} Safari/537.36",
+# UA doesn't vary by CPU arch on macOS -- Apple Silicon Chrome/Firefox both still
+# report "Intel Mac OS X" in their UA string. Known, deliberate quirk, not a bug here.
+# Keyed by the same names browser_cookie3 uses (chrome, firefox, edge, ...), since
+# that's what --browser takes.
+_MAC_BROWSER_INFO: dict[str, tuple[str, str]] = {
+    "chrome": (
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/{version} Safari/537.36"
+        ),
+    ),
+    "firefox": (
+        "/Applications/Firefox.app/Contents/MacOS/firefox",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:{version}) "
+            "Gecko/20100101 Firefox/{version}"
+        ),
+    ),
+    "edge": (
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/{version} Safari/537.36 Edg/{version}"
+        ),
+    ),
+}
+
+# curl_cffi impersonation target for each browser_cookie3 name -- picks the TLS/HTTP2
+# fingerprint that should actually match whichever browser solved the challenge.
+IMPERSONATE_BY_BROWSER: dict[str, str] = {
+    "chrome": "chrome",
+    "edge": "chrome",  # Edge is Chromium; curl_cffi has no distinct Edge profile
+    "firefox": "firefox",
 }
 
 
@@ -35,6 +63,7 @@ _UA_TEMPLATE = {
 class Session:
     cookies: dict[str, str] = field(default_factory=dict)
     user_agent: str = ""
+    browser: str = "chrome"
     saved_at: float = 0.0
 
     def age_seconds(self) -> float:
@@ -64,20 +93,22 @@ def clear() -> None:
         SESSION_FILE.unlink()
 
 
-def detect_chrome_user_agent() -> str | None:
-    """Best-effort UA string matching the actually-installed Chrome, so it lines up
+def detect_user_agent(browser: str) -> str | None:
+    """Best-effort UA string matching the actually-installed browser, so it lines up
     with whatever version just solved the challenge. Returns None if we can't tell
-    (unsupported OS, Chrome not found at the expected path) -- caller should fall
-    back to asking the user or to curl_cffi's own impersonation default."""
-    system = platform.system()
-    template = _UA_TEMPLATE.get(system)
-    if not template:
+    (unsupported OS/browser, binary not found at the expected path) -- caller should
+    fall back to asking the user or to curl_cffi's own impersonation default."""
+    if platform.system() != "Darwin":
         return None
+    info = _MAC_BROWSER_INFO.get(browser)
+    if not info:
+        return None
+    path, template = info
     try:
         out = subprocess.run(
-            [_MAC_CHROME_PATH, "--version"], capture_output=True, text=True, timeout=5, check=False
+            [path, "--version"], capture_output=True, text=True, timeout=5, check=False
         )
-        # "Google Chrome 130.0.6723.92" -> "130.0.6723.92"
+        # "Google Chrome 130.0.6723.92" / "Mozilla Firefox 130.0.1" -> last token
         version = out.stdout.strip().rsplit(" ", 1)[-1]
     except (OSError, subprocess.SubprocessError):
         return None
@@ -117,8 +148,20 @@ def from_installed_browser(*, browser: str = "chrome") -> Session:
             "checkbox) before retrying."
         )
 
-    user_agent = detect_chrome_user_agent() or ""
-    return Session(cookies=cookies, user_agent=user_agent, saved_at=time.time())
+    user_agent = detect_user_agent(browser) or ""
+    return Session(cookies=cookies, user_agent=user_agent, browser=browser, saved_at=time.time())
+
+
+def guess_browser_from_ua(user_agent: str) -> str:
+    """Classify a pasted User-Agent well enough to pick a curl_cffi impersonation
+    profile (see IMPERSONATE_BY_BROWSER) -- doesn't need to be precise, just Chrome-
+    family vs. Firefox."""
+    ua = user_agent.lower()
+    if "firefox" in ua and "seamonkey" not in ua:
+        return "firefox"
+    if "edg/" in ua:
+        return "edge"
+    return "chrome"
 
 
 def parse_cookie_header(header: str) -> dict[str, str]:
