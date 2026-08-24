@@ -36,6 +36,16 @@ class ProductDetail:
 
 
 @dataclass
+class ProductLookupResult:
+    """One entry in a batch product() lookup -- exactly one of detail/error is
+    set, so one bad id in a batch doesn't take down the others."""
+
+    product_id: str
+    detail: ProductDetail | None = None
+    error: str | None = None
+
+
+@dataclass
 class SearchPage:
     """One page of search/category results, plus pagination metadata parsed from
     the page itself (see parser.parse_search_meta) -- not guessed from request

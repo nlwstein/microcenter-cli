@@ -10,7 +10,7 @@ from curl_cffi.requests.exceptions import CurlError, DNSError, SSLError
 
 from . import parser, session, urls
 from .config import Config
-from .models import ProductDetail, SearchPage, SearchResult
+from .models import ProductDetail, ProductLookupResult, SearchPage, SearchResult
 
 IMPORT_HINT = (
     "no valid session. Run `mcenter session interactive` (see `mcenter session "
@@ -148,9 +148,15 @@ class MicroCenterClient:
         return resp.text
 
     def search(
-        self, query: str, store_id: str, *, page: int = 1, category_n: str | None = None
+        self,
+        query: str,
+        store_id: str,
+        *,
+        page: int = 1,
+        category_n: str | None = None,
+        sort: str | None = None,
     ) -> list[SearchResult]:
-        return self.search_page(query, store_id, page=page, category_n=category_n).results
+        return self.search_page(query, store_id, page=page, category_n=category_n, sort=sort).results
 
     def search_page(
         self,
@@ -160,8 +166,9 @@ class MicroCenterClient:
         page: int = 1,
         category_n: str | None = None,
         rpp: int | None = None,
+        sort: str | None = None,
     ) -> SearchPage:
-        html = self._get(urls.search_url(query, store_id, page, category_n, rpp), store_id)
+        html = self._get(urls.search_url(query, store_id, page, category_n, rpp, sort), store_id)
         return parser.parse_search_page(html, store_id, requested_page=page)
 
     def search_all(
@@ -171,6 +178,7 @@ class MicroCenterClient:
         *,
         category_n: str | None = None,
         rpp: int | None = None,
+        sort: str | None = None,
         max_pages: int = MAX_AUTO_PAGES,
     ):
         """Yields SearchResults across every page, stopping when the site stops
@@ -180,7 +188,7 @@ class MicroCenterClient:
         page = 1
         while page <= max_pages:
             result_page = self.search_page(
-                query, store_id, page=page, category_n=category_n, rpp=rpp
+                query, store_id, page=page, category_n=category_n, rpp=rpp, sort=sort
             )
             yield from result_page.results
             if not result_page.has_next:
@@ -216,6 +224,21 @@ class MicroCenterClient:
                 "the page structure again (see parser.py, `mcenter debug fetch`)."
             )
         return detail
+
+    def products(self, product_ids: list[str], store_id: str) -> list[ProductLookupResult]:
+        """Batch product() lookup -- one call site instead of N, for the common
+        "verify a shortlist" pattern. Sequential, not concurrent (this client
+        isn't thread-safe and the rate limiter assumes serial requests), but
+        still saves N round-trip declarations for a caller. One bad id doesn't
+        abort the batch -- its ProductLookupResult just carries an error."""
+        results = []
+        for product_id in product_ids:
+            try:
+                detail = self.product(product_id, store_id)
+                results.append(ProductLookupResult(product_id=product_id, detail=detail))
+            except MicroCenterError as exc:
+                results.append(ProductLookupResult(product_id=product_id, error=str(exc)))
+        return results
 
     def raw_fetch(self, url: str, store_id: str) -> str:
         """Escape hatch for calibrating parser.py against real pages."""

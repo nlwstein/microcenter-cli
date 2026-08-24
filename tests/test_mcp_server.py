@@ -12,7 +12,13 @@ from microcenter_cli.mcp_server import mcp
 def test_expected_tools_are_registered():
     tools = asyncio.run(mcp.list_tools())
     names = {t.name for t in tools}
-    assert names == {"search_products", "get_product", "find_store", "list_stores"}
+    assert names == {
+        "search_products",
+        "get_product",
+        "get_products",
+        "find_store",
+        "list_stores",
+    }
 
 
 def test_tools_have_descriptions():

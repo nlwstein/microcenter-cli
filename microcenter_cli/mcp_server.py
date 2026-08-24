@@ -17,6 +17,8 @@ from mcp.server.mcpserver import MCPServer
 from . import stores as store_table
 from .client import MicroCenterClient, MicroCenterError
 from .config import load_config
+from .filters import FilterSpec, filter_results
+from .urls import SORT_OPTIONS
 
 mcp = MCPServer(
     name="microcenter",
@@ -34,21 +36,58 @@ def _client() -> MicroCenterClient:
 
 
 @mcp.tool()
-def search_products(query: str, store_id: str, page: int = 1) -> dict:
+def search_products(
+    query: str,
+    store_id: str,
+    page: int = 1,
+    sort: str | None = None,
+    in_stock_only: bool = False,
+    max_price: float | None = None,
+    min_price: float | None = None,
+    exclude: list[str] | None = None,
+    category_contains: str | None = None,
+) -> dict:
     """Search Micro Center's catalog for products matching a query, with
     price/stock at a specific store. Returns one page of results plus
     pagination info (total_items, total_pages, has_next). Use find_store first
-    if you only have a city/state name, not a store id."""
+    if you only have a city/state name, not a store id.
+
+    sort: one of "match" (default/relevance), "rating", "reviews", "price-low",
+    "price-high", "newest" -- verified against the site's own sort options, not
+    guessed. Changes which items land on this page, not just their order.
+
+    The filter params (in_stock_only, max_price, min_price, exclude,
+    category_contains) are applied client-side to what the page actually
+    returned -- useful for pruning noise a plain keyword search picks up (e.g.
+    exclude=["laptop", "gaming pc"] to keep only standalone components), and
+    for catching things a price-only filter can silently get wrong (e.g. a
+    laptop SO-DIMM ranking as "cheapest RAM" ahead of a desktop-compatible
+    module -- check category_contains/name yourself when it matters).
+    """
+    if sort is not None and sort not in SORT_OPTIONS:
+        return {"error": f"unknown sort '{sort}' -- valid: {', '.join(SORT_OPTIONS)}"}
+
     try:
-        result = _client().search_page(query, store_id, page=page)
+        result = _client().search_page(query, store_id, page=page, sort=sort)
     except MicroCenterError as exc:
         return {"error": str(exc)}
+
+    spec = FilterSpec(
+        in_stock_only=in_stock_only,
+        max_price=max_price,
+        min_price=min_price,
+        exclude=tuple(exclude or ()),
+        category_contains=category_contains,
+    )
+    results = filter_results(result.results, spec)
+
     return {
         "page": result.page,
         "total_items": result.total_items,
         "total_pages": result.total_pages,
         "has_next": result.has_next,
-        "results": [r.__dict__ for r in result.results],
+        "results_before_filter": len(result.results),
+        "results": [r.__dict__ for r in results],
     }
 
 
@@ -63,6 +102,18 @@ def get_product(product_id: str, store_id: str) -> dict:
     except MicroCenterError as exc:
         return {"error": str(exc)}
     return detail.__dict__
+
+
+@mcp.tool()
+def get_products(product_ids: list[str], store_id: str) -> list[dict]:
+    """Batch version of get_product -- verify a whole shortlist (e.g. from
+    search_products) in one call instead of one per item. One bad id doesn't
+    fail the rest; check each entry's "error" field."""
+    results = _client().products(product_ids, store_id)
+    return [
+        {"product_id": r.product_id, "detail": r.detail.__dict__ if r.detail else None, "error": r.error}
+        for r in results
+    ]
 
 
 @mcp.tool()

@@ -24,8 +24,8 @@ class FakeClient:
     def __init__(self):
         self.calls: list[tuple] = []
 
-    def search_page(self, query, store_id, *, page=1, category_n=None, rpp=None):
-        self.calls.append(("search_page", query, store_id, page, category_n, rpp))
+    def search_page(self, query, store_id, *, page=1, category_n=None, rpp=None, sort=None):
+        self.calls.append(("search_page", query, store_id, page, category_n, rpp, sort))
         result = SearchResult(
             product_id="1",
             name="Widget",
@@ -42,8 +42,8 @@ class FakeClient:
             results=[result], page=page, items_per_page=24, total_items=1, has_next=False
         )
 
-    def search_all(self, query, store_id, *, category_n=None, rpp=None, max_pages=50):
-        self.calls.append(("search_all", query, store_id, category_n, rpp))
+    def search_all(self, query, store_id, *, category_n=None, rpp=None, sort=None, max_pages=50):
+        self.calls.append(("search_all", query, store_id, category_n, rpp, sort))
         yield self.search_page(query, store_id).results[0]
 
     def product(self, product_id, store_id):
@@ -56,6 +56,15 @@ class FakeClient:
             in_stock=True,
             store_id=store_id,
         )
+
+    def products(self, product_ids, store_id):
+        self.calls.append(("products", tuple(product_ids), store_id))
+        from microcenter_cli.models import ProductLookupResult
+
+        return [
+            ProductLookupResult(product_id=pid, detail=self.product(pid, store_id))
+            for pid in product_ids
+        ]
 
     def raw_fetch(self, url, store_id):
         self.calls.append(("raw_fetch", url, store_id))
@@ -162,6 +171,77 @@ def test_stores_find(runner):
     result = runner.invoke(cli_module.cli, ["stores", "find", "cambridge"])
     assert result.exit_code == 0
     assert "121" in result.output
+
+
+def test_search_sort_passed_through(runner, fake_client):
+    result = runner.invoke(
+        cli_module.cli, ["search", "widget", "--store", "121", "--sort", "price-low"]
+    )
+    assert result.exit_code == 0, result.output
+    assert fake_client.calls[0][-1] == "price-low"  # sort is the last positional recorded
+
+
+def test_search_bad_sort_is_a_usage_error(runner, fake_client):
+    result = runner.invoke(cli_module.cli, ["search", "widget", "--store", "121", "--sort", "bogus"])
+    assert result.exit_code != 0
+    assert "Traceback" not in result.output
+
+
+def test_search_filters_applied(runner, monkeypatch):
+    """FakeClient with two results (one in-stock, one not) -- --in-stock-only
+    should drop exactly the one that isn't."""
+    from microcenter_cli.context import Ctx
+    from microcenter_cli.models import SearchPage, SearchResult
+
+    class TwoResultClient:
+        def search_page(self, query, store_id, *, page=1, category_n=None, rpp=None, sort=None):
+            results = [
+                SearchResult(
+                    product_id="in-stock-item",
+                    name="Widget A",
+                    price=10.0,
+                    category=None,
+                    brand=None,
+                    stock_text="5 IN STOCK at Cambridge Store",
+                    rating=None,
+                    reviews=None,
+                    offer=None,
+                    store_id=store_id,
+                ),
+                SearchResult(
+                    product_id="sold-out-item",
+                    name="Widget B",
+                    price=5.0,
+                    category=None,
+                    brand=None,
+                    stock_text="SOLD OUT at Cambridge Store",
+                    rating=None,
+                    reviews=None,
+                    offer=None,
+                    store_id=store_id,
+                ),
+            ]
+            return SearchPage(results=results, page=1, items_per_page=24, total_items=2, has_next=False)
+
+    monkeypatch.setattr(cli_module, "load_config", lambda: Config())
+    monkeypatch.setattr(Ctx, "client", lambda self: TwoResultClient())
+
+    result = runner.invoke(
+        cli_module.cli, ["search", "widget", "--store", "121", "--in-stock-only", "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert [r["product_id"] for r in data] == ["in-stock-item"]
+
+
+def test_products_batch_json_output(runner, fake_client):
+    result = runner.invoke(
+        cli_module.cli, ["products", "1", "2", "3", "--store", "121", "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert [d["product_id"] for d in data] == ["1", "2", "3"]
+    assert all(d["detail"]["product_id"] == d["product_id"] for d in data)
 
 
 def test_session_status_no_session(runner, monkeypatch, tmp_path):

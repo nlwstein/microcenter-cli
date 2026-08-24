@@ -35,6 +35,7 @@ from .commands import stores as _stores
 
 cli.add_command(_search.search)
 cli.add_command(_product.product)
+cli.add_command(_product.products)
 cli.add_command(_stores.stores)
 cli.add_command(_session.session)
 cli.add_command(_debug.debug)
