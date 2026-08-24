@@ -105,15 +105,26 @@ def get_product(product_id: str, store_id: str) -> dict:
 
 
 @mcp.tool()
-def get_products(product_ids: list[str], store_id: str) -> list[dict]:
+def get_products(product_ids: list[str], store_id: str) -> dict:
     """Batch version of get_product -- verify a whole shortlist (e.g. from
     search_products) in one call instead of one per item. One bad id doesn't
-    fail the rest; check each entry's "error" field."""
+    fail the rest; check each entry's "error" field.
+
+    Returns a dict wrapping the list (not a bare list): the MCP framework
+    serializes a bare list[...] return as one content block *per item*
+    instead of a single JSON array, so a client doing the natural
+    json.loads(result.content[0].text) would silently only see the first
+    result. Wrapping in {"results": [...]} keeps this to one block, one
+    json.loads(), the whole list -- confirmed against a real MCP client
+    session, not just by reading the framework's source.
+    """
     results = _client().products(product_ids, store_id)
-    return [
-        {"product_id": r.product_id, "detail": r.detail.__dict__ if r.detail else None, "error": r.error}
-        for r in results
-    ]
+    return {
+        "results": [
+            {"product_id": r.product_id, "detail": r.detail.__dict__ if r.detail else None, "error": r.error}
+            for r in results
+        ]
+    }
 
 
 @mcp.tool()
@@ -127,9 +138,15 @@ def find_store(query: str) -> dict:
 
 
 @mcp.tool()
-def list_stores() -> list[dict]:
-    """List all known Micro Center store ids (best-effort, may be incomplete)."""
-    return [{"id": s.id, "state": s.state, "city": s.city} for s in store_table.STORES.values()]
+def list_stores() -> dict:
+    """List all known Micro Center store ids (best-effort, may be incomplete).
+
+    Returns {"stores": [...]}, not a bare list -- see get_products' docstring
+    for why (a bare list return serializes as one content block per item).
+    """
+    return {
+        "stores": [{"id": s.id, "state": s.state, "city": s.city} for s in store_table.STORES.values()]
+    }
 
 
 def main() -> None:
