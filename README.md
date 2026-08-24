@@ -5,10 +5,7 @@ per-store stock + price. No official Micro Center API exists, and no maintained 
 server or CLI for this was found on GitHub as of 2026-08 — this fills that gap.
 Verified end-to-end against live microcenter.com data, not just synthetic fixtures.
 
-Free and open source. If it's useful to you, [Sponsor this project](#support-this-project)
-— there's no paid tier, no account, no gated features; sponsorship funds maintenance
-(Micro Center's HTML *will* drift again, see [When this breaks](#when-this-breaks)),
-not access.
+Free and open source, no paid tier, no account, no gated features.
 
 ## Agent / MCP support
 
@@ -214,17 +211,8 @@ scraper that turned out not to match reality at all). If you start getting
 `MicroCenterBlockedError`, that's the session step above — re-run
 `mcenter session interactive`.
 
-This is exactly the kind of thing sponsorship funds, and exactly the kind of thing
-contributions help with even more directly — if you hit a parsing break, a PR with
-the fix (following the recalibration workflow above) is worth more than a report.
-
-## Support this project
-
-Free, open source, no paid tier. If this saves you time — especially if you're
-building agent/MCP tooling on top of it — consider sponsoring to help fund the
-ongoing maintenance this kind of scraping-adjacent tool inherently needs (Micro
-Center's HTML *will* drift; someone has to notice and fix it). No sponsorship tier
-unlocks anything — everything here is already unlocked.
+If you hit a parsing break, a PR with the fix (following the recalibration workflow
+above) is worth more than a report.
 
 ## License
 
