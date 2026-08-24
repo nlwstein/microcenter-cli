@@ -226,6 +226,10 @@ ongoing maintenance this kind of scraping-adjacent tool inherently needs (Micro
 Center's HTML *will* drift; someone has to notice and fix it). No sponsorship tier
 unlocks anything — everything here is already unlocked.
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Repo conventions
 
 Python + Click + rich + `uv`, per the standard homelab CLI tool pattern (see
