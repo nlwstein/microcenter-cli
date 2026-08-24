@@ -7,8 +7,8 @@ from .config import Config
 from .models import ProductDetail, SearchResult
 
 IMPORT_HINT = (
-    "no valid session. Solve the checkbox by hand in a real browser and run "
-    "`mcenter session import` (see `mcenter session status` for the exact steps)."
+    "no valid session. Run `mcenter session interactive` (see `mcenter session "
+    "status` if that doesn't work for your setup)."
 )
 
 
@@ -22,11 +22,11 @@ class MicroCenterBlockedError(MicroCenterError):
 
 class MicroCenterClient:
     """Plain-HTTP client (TLS-impersonated via curl_cffi) that reuses a session
-    cookie imported from a real, human-solved browser session (see
-    `mcenter session import`). Micro Center's Turnstile checkbox rejects any
-    automation-controlled browser outright, so nothing in this library can solve
-    it itself — it can only detect when the imported session has gone stale and
-    say so clearly.
+    cookie captured from a real, human-solved browser session (see
+    `mcenter session interactive` / `session import`). Micro Center's Turnstile
+    checkbox rejects any automation-controlled browser outright, so nothing in this
+    library can solve it itself — it can only detect when the session has gone
+    stale and say so clearly.
     """
 
     def __init__(self, config: Config):

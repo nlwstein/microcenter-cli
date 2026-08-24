@@ -13,10 +13,22 @@ subsequent plain-HTTP requests until it expires or gets invalidated.
 from __future__ import annotations
 
 import json
+import platform
+import subprocess
 import time
 from dataclasses import asdict, dataclass, field
 
 from .config import SESSION_FILE
+
+MICROCENTER_DOMAIN = "microcenter.com"
+
+# Chrome's UA doesn't vary by CPU arch on macOS (Apple Silicon Chrome still reports
+# "Intel Mac OS X") -- this is a known, deliberate Chrome quirk, not a bug here.
+_MAC_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+_UA_TEMPLATE = {
+    "Darwin": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/{version} Safari/537.36",
+}
 
 
 @dataclass
@@ -50,6 +62,63 @@ def save(session: Session) -> None:
 def clear() -> None:
     if SESSION_FILE.exists():
         SESSION_FILE.unlink()
+
+
+def detect_chrome_user_agent() -> str | None:
+    """Best-effort UA string matching the actually-installed Chrome, so it lines up
+    with whatever version just solved the challenge. Returns None if we can't tell
+    (unsupported OS, Chrome not found at the expected path) -- caller should fall
+    back to asking the user or to curl_cffi's own impersonation default."""
+    system = platform.system()
+    template = _UA_TEMPLATE.get(system)
+    if not template:
+        return None
+    try:
+        out = subprocess.run(
+            [_MAC_CHROME_PATH, "--version"], capture_output=True, text=True, timeout=5, check=False
+        )
+        # "Google Chrome 130.0.6723.92" -> "130.0.6723.92"
+        version = out.stdout.strip().rsplit(" ", 1)[-1]
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return template.format(version=version)
+
+
+class BrowserCookieError(RuntimeError):
+    pass
+
+
+def from_installed_browser(*, browser: str = "chrome") -> Session:
+    """Pull a live cf_clearance (and friends) straight out of a real, already-running
+    browser's own cookie store -- no automation protocol involved at any point, so
+    none of the CDP-detection issues documented at the top of this module apply.
+    Requires the user to have just solved the challenge in that same browser."""
+    import browser_cookie3
+
+    try:
+        loader = getattr(browser_cookie3, browser)
+    except AttributeError as exc:
+        raise BrowserCookieError(f"unsupported browser '{browser}'") from exc
+
+    try:
+        jar = loader(domain_name=MICROCENTER_DOMAIN)
+    except Exception as exc:  # browser_cookie3 raises varied, undocumented types
+        raise BrowserCookieError(
+            f"couldn't read {browser}'s cookie store: {exc}. Falling back to "
+            "`mcenter session import` (paste the Cookie header manually) will "
+            "always work regardless of this."
+        ) from exc
+
+    cookies = {c.name: c.value for c in jar}
+    if "cf_clearance" not in cookies:
+        raise BrowserCookieError(
+            "no cf_clearance cookie found for microcenter.com in your browser yet -- "
+            "make sure the page finished loading (past any 'Verify you are human' "
+            "checkbox) before retrying."
+        )
+
+    user_agent = detect_chrome_user_agent() or ""
+    return Session(cookies=cookies, user_agent=user_agent, saved_at=time.time())
 
 
 def parse_cookie_header(header: str) -> dict[str, str]:

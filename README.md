@@ -25,11 +25,25 @@ can pass this, because the tell isn't the click, it's that something is driving 
 browser via an automation protocol at all. This tool doesn't try to defeat that.
 
 **The only path is a human solving it once in their own, un-automated browser**, then
-handing the resulting session to this tool:
+handing the resulting session to this tool. Two ways to do that:
+
+### Preferred: `session interactive`
 
 ```bash
-mcenter session status   # prints these steps if you don't have a session yet
+mcenter session interactive
 ```
+
+Opens Micro Center in your actual default browser (via `webbrowser.open` — a normal
+OS-level browser launch, no debugging/automation protocol attached at any point).
+Solve the checkbox there if you're shown one, come back to the terminal and press
+Enter, and the tool reads `cf_clearance` straight out of that browser's own cookie
+store (`browser_cookie3`, the same mechanism a password manager or sync extension
+uses — not automation, just reading state off disk after the fact). Defaults to
+Chrome; pass `--browser firefox` etc. for others.
+
+### Fallback: `session import`
+
+If `browser_cookie3` can't read your profile for some reason:
 
 1. Open https://www.microcenter.com/ in your everyday Chrome/Firefox/Safari.
 2. Click "Verify you are human" if shown.
@@ -38,11 +52,14 @@ mcenter session status   # prints these steps if you don't have a session yet
 4. Copy your browser's `navigator.userAgent` (DevTools console).
 5. `mcenter session import --cookie-header "<paste>" --user-agent "<paste>"`
 
-That's cached to `~/.config/microcenter-cli/session.json` (path via `platformdirs`)
-and reused as plain TLS-impersonated HTTP (`curl_cffi`) for every subsequent
-search/product call — no browser involved for normal use. When the client gets
-challenged again (session expired/invalidated), it raises a clear error telling you
-to re-run `session import` — it does not, and cannot, try to solve it itself.
+---
+
+Either way it's cached to `~/.config/microcenter-cli/session.json` (path via
+`platformdirs`) and reused as plain TLS-impersonated HTTP (`curl_cffi`) for every
+subsequent search/product call — no browser involved for normal use. When the client
+gets challenged again (session expired/invalidated), it raises a clear error telling
+you to re-run `session interactive` — it does not, and cannot, try to solve it
+itself.
 
 Session lifetime is not yet characterized empirically. `session_ttl_seconds` (default
 1200s) only controls what `session status` calls "possibly stale" as a heads-up; it
@@ -81,7 +98,8 @@ the structured commands don't cover yet.
 Micro Center's HTML is not a stable contract. `parser.py` documents exactly which
 selectors it depends on and how to recalibrate them (`mcenter debug fetch <url> --out
 page.html`, diff against what `parser.py` expects). If you start getting
-`MicroCenterBlockedError`, that's the session-import step above — re-run it.
+`MicroCenterBlockedError`, that's the session step above — re-run
+`mcenter session interactive`.
 
 ## Repo conventions
 
