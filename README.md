@@ -31,8 +31,8 @@ handing the resulting session to this tool. Two ways to do that:
 ### Preferred: `session interactive`
 
 ```bash
-mcenter session interactive                 # reads Chrome's cookie jar by default
-mcenter session interactive --browser firefox   # or Firefox, Edge, ...
+mcenter session interactive                     # auto-detects your OS default browser
+mcenter session interactive --browser firefox    # or force one explicitly
 ```
 
 Opens Micro Center in your actual default browser (via `webbrowser.open` — a normal
@@ -40,14 +40,16 @@ OS-level browser launch, no debugging/automation protocol attached at any point)
 Solve the checkbox there if you're shown one, come back to the terminal and press
 Enter, and the tool reads `cf_clearance` straight out of that browser's own cookie
 store (`browser_cookie3`, the same mechanism a password manager or sync extension
-uses — not automation, just reading state off disk after the fact).
+uses — not automation, just reading state off disk after the fact). If the check is
+still verifying when you press Enter, it asks whether to check again rather than
+failing outright.
 
-**`--browser` must match whatever your OS actually opened** — `webbrowser.open`
-launches your *default* browser, not necessarily Chrome. If it opened Firefox and you
-run `session interactive` with the default `--browser chrome`, it reads an empty
-Chrome cookie jar and fails with a confusing "no cf_clearance found" error. Check
-which browser opened, then pass `--browser` to match (`chrome`, `firefox`, `edge`).
-The tool also auto-detects a matching User-Agent from the installed browser binary's
+`--browser` needs to match whatever your OS actually opened — `webbrowser.open`
+launches your *default* browser, which isn't necessarily Chrome. Omitting `--browser`
+auto-detects it (macOS: reads LaunchServices' registered `http` handler), so this
+should just work; pass `--browser` explicitly only if auto-detection guesses wrong or
+you're on a non-macOS host (falls back to assuming `chrome` there for now). The tool
+also auto-detects a matching User-Agent from the installed browser binary's
 `--version` output and remembers which browser was used, so later requests
 TLS-impersonate the right one (Chrome vs. Firefox have distinguishable fingerprints).
 

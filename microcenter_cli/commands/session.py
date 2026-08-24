@@ -61,12 +61,12 @@ def status(ctx: Ctx) -> None:
 @session.command("interactive")
 @click.option(
     "--browser",
-    default="chrome",
-    show_default=True,
+    default=None,
     help="Which installed browser to read the cookie back out of (see browser_cookie3 "
-    "for supported names: chrome, firefox, edge, safari, ...).",
+    "for supported names: chrome, firefox, edge, safari, ...). Auto-detected from your "
+    "OS default browser when omitted (macOS only; falls back to chrome elsewhere).",
 )
-def interactive_cmd(browser: str) -> None:
+def interactive_cmd(browser: str | None) -> None:
     """Open Micro Center in your real browser, wait for you to clear any Cloudflare
     check, then read the resulting session cookie straight out of that browser's own
     (already-installed, non-automated) cookie store.
@@ -75,22 +75,32 @@ def interactive_cmd(browser: str) -> None:
     just your browser doing what it normally does, plus this tool reading its cookie
     jar afterward, the same way a password manager or sync extension would.
     """
+    if browser is None:
+        browser = session_store.detect_default_browser() or "chrome"
+        console.print(f"(detected default browser: {browser} -- pass --browser to override)")
+
     console.print(f"Opening {MICROCENTER_HOME} in your default browser...")
     webbrowser.open(MICROCENTER_HOME)
-    click.prompt(
-        "Solve the 'Verify you are human' check if you're shown one, wait for the "
-        "page to finish loading normally, then press Enter here",
-        default="",
-        show_default=False,
-        prompt_suffix=" ",
-    )
 
-    try:
-        s = session_store.from_installed_browser(browser=browser)
-    except session_store.BrowserCookieError as exc:
-        console.print(f"[red]error:[/red] {exc}")
-        console.print(MANUAL_IMPORT_HELP)
-        raise SystemExit(1) from None
+    # The checkbox's own "This may take a few seconds" verification step means a
+    # first check can legitimately be too early -- loop rather than making the
+    # user re-run the whole command for what's often just an early Enter press.
+    while True:
+        click.prompt(
+            "Solve the 'Verify you are human' check if you're shown one, wait for the "
+            "page to finish loading normally, then press Enter here",
+            default="",
+            show_default=False,
+            prompt_suffix=" ",
+        )
+        try:
+            s = session_store.from_installed_browser(browser=browser)
+            break
+        except session_store.BrowserCookieError as exc:
+            console.print(f"[red]error:[/red] {exc}")
+            if not click.confirm("Check again?", default=True):
+                console.print(MANUAL_IMPORT_HELP)
+                raise SystemExit(1) from None
 
     session_store.save(s)
     ua_note = f", ua detected: {s.user_agent[:60]}..." if s.user_agent else " (UA not detected)"

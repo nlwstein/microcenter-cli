@@ -22,9 +22,9 @@ stealth patching gets detected and reverted specifically because of the CDP
 automation attachment, independent of whether a real click happens). Tell the human:
 
 > Run `mcenter session interactive` (opens Micro Center in your real default
-> browser; solve the checkbox if shown, then press Enter in the terminal — make
-> sure `--browser` matches whichever browser actually opened, e.g. `--browser
-> firefox` if Firefox is your default, not the `chrome` default).
+> browser; solve the checkbox if shown, then press Enter in the terminal — it
+> auto-detects which browser to read the cookie back from, but pass `--browser
+> firefox`/etc. explicitly if it guesses wrong).
 
 Do not attempt to work around this with your own browser automation, curl, or
 anything else — it has been tried and structurally cannot work. See this repo's

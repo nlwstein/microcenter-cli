@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
@@ -22,6 +23,15 @@ from dataclasses import asdict, dataclass, field
 from .config import SESSION_FILE
 
 MICROCENTER_DOMAIN = "microcenter.com"
+
+# macOS LaunchServices bundle id -> browser_cookie3 name, for detect_default_browser.
+_MAC_BUNDLE_ID_TO_BROWSER = {
+    "org.mozilla.firefox": "firefox",
+    "com.google.chrome": "chrome",
+    "com.apple.safari": "safari",
+    "com.microsoft.edgemac": "edge",
+    "com.brave.browser": "brave",
+}
 
 # UA doesn't vary by CPU arch on macOS -- Apple Silicon Chrome/Firefox both still
 # report "Intel Mac OS X" in their UA string. Known, deliberate quirk, not a bug here.
@@ -120,6 +130,49 @@ def detect_user_agent(browser: str) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return template.format(version=version)
+
+
+def detect_default_browser() -> str | None:
+    """Best-effort: which browser `webbrowser.open()` will actually launch, so
+    `session interactive` can default --browser correctly instead of assuming
+    Chrome. This exists because that exact wrong assumption produced a confusing
+    "no cf_clearance found" error for a Firefox-default user in practice.
+
+    macOS only for now (reads LaunchServices' registered handler for the `http`
+    URL scheme via `defaults read`). Returns None on any other OS, or if the
+    handler is some browser not in _MAC_BUNDLE_ID_TO_BROWSER -- caller should
+    fall back to a hardcoded default, not treat None as an error."""
+    if platform.system() != "Darwin":
+        return None
+    try:
+        out = subprocess.run(
+            [
+                "defaults",
+                "read",
+                "com.apple.LaunchServices/com.apple.launchservices.secure",
+                "LSHandlers",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    # Plist-as-text output nests dicts (e.g. LSHandlerPreferredVersions), so a
+    # brace-matching parse would need real depth tracking. Cheaper and reliable
+    # in practice: LSHandlerRoleAll/LSHandlerURLScheme are always emitted at the
+    # same (8-space) indent for a given top-level entry, one non-nested field
+    # per line -- track the most recent top-level RoleAll and match it against
+    # the URLScheme line when we hit "http".
+    last_role: str | None = None
+    for line in out.splitlines():
+        if m := re.match(r'^ {8}LSHandlerRoleAll = "([^"]+)";$', line):
+            last_role = m.group(1)
+        elif re.match(r"^ {8}LSHandlerURLScheme = http;$", line):
+            return _MAC_BUNDLE_ID_TO_BROWSER.get((last_role or "").lower())
+    return None
 
 
 class BrowserCookieError(RuntimeError):
