@@ -1,6 +1,6 @@
 [project]
 name = "microcenter-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI/library for Micro Center catalog search, drill-down, and per-store stock/price"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,6 +1,12 @@
 # Copy to the path shown by `python3 -c "from platformdirs import user_config_dir;
-# print(user_config_dir('microcenter-cli'))"` as config.toml. All fields optional;
-# MICROCENTER_STORE / MICROCENTER_SESSION_TTL env vars, and --store, override these.
+# print(user_config_dir('microcenter-cli'))"` as config.toml. All fields optional.
+# CLI flags > env vars > this file > defaults. Env vars: MICROCENTER_STORE,
+# MICROCENTER_SESSION_TTL, MICROCENTER_TIMEOUT, MICROCENTER_VERBOSE.
 
 default_store = "121"          # MA - Cambridge; see `mcenter stores list`
 session_ttl_seconds = 1200     # `session status` flags the session possibly-stale past this age
+
+request_timeout_seconds = 30.0 # per-request timeout
+max_retries = 3                # transient network errors / 5xx only -- never for 403/challenge
+retry_backoff_seconds = 1.0    # doubles each retry (1s, 2s, 4s, ...)
+min_request_interval_seconds = 0.75  # floor between consecutive requests, esp. --all-pages

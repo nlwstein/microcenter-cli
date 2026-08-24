@@ -33,3 +33,22 @@ class ProductDetail:
     price: float | None
     in_stock: bool | None
     store_id: str
+
+
+@dataclass
+class SearchPage:
+    """One page of search/category results, plus pagination metadata parsed from
+    the page itself (see parser.parse_search_meta) -- not guessed from request
+    params, since rpp/page can be silently clamped by the site."""
+
+    results: list[SearchResult]
+    page: int
+    items_per_page: int | None
+    total_items: int | None
+    has_next: bool
+
+    @property
+    def total_pages(self) -> int | None:
+        if self.total_items is None or not self.items_per_page:
+            return None
+        return -(-self.total_items // self.items_per_page)  # ceil div

@@ -4,11 +4,24 @@ from urllib.parse import quote_plus
 
 SEARCH_URL = "https://www.microcenter.com/search/search_results.aspx"
 
+# The only values the site's own "Items per page" dropdown offers (see
+# parser.py's docstring for where this was observed). Passing anything else
+# isn't known to error, but there's no evidence it's honored either.
+VALID_RESULTS_PER_PAGE = (24, 48, 96)
 
-def search_url(query: str, store_id: str, page: int = 1, category_n: str | None = None) -> str:
+
+def search_url(
+    query: str,
+    store_id: str,
+    page: int = 1,
+    category_n: str | None = None,
+    rpp: int | None = None,
+) -> str:
     params = [f"Ntt={quote_plus(query)}", "NTK=all", f"page={page}", f"storeid={store_id}"]
     if category_n:
         params.insert(0, f"N={category_n}")
+    if rpp:
+        params.append(f"rpp={rpp}")
     return f"{SEARCH_URL}?{'&'.join(params)}"
 
 

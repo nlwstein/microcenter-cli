@@ -37,15 +37,26 @@ None.
 
 If this drifts again: `mcenter debug fetch <url> --out page.html`, then diff
 against the shape above.
+
+Pagination metadata (parse_search_page) comes from three independent signals on
+the same page: the `<p class="status">1 - 24 of 183 items</p>` line, the
+`<span class="itemsPerPage">24</span>` selector value, and a `<link rel="next">`
+in <head> that's simply absent on the last page. Deliberately not derived from
+echoing back request params (?page=, &rpp=) -- the site can silently clamp those
+rather than erroring, which would make request-echo pagination lie.
 """
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 
 from bs4 import BeautifulSoup
 
-from .models import ProductDetail, SearchResult
+from .models import ProductDetail, SearchPage, SearchResult
+
+# "1 - 24 of 183 items" in <p class="status">, in the bottom pagination block.
+_STATUS_RE = re.compile(r"([\d,]+)\s*-\s*([\d,]+)\s*of\s*([\d,]+)\s*items?", re.IGNORECASE)
 
 
 def _float_or_none(text: str | None) -> float | None:
@@ -58,10 +69,17 @@ def _float_or_none(text: str | None) -> float | None:
         return None
 
 
+def _unescape(text: str) -> str:
+    # Micro Center's data-* attributes are sometimes double-encoded (a literal
+    # "&quot;" appears in the decoded attribute value, not an actual quote) --
+    # unescape again to clean that up. A no-op on already-clean text.
+    return html_lib.unescape(text)
+
+
 def _text_or_none(el) -> str | None:
     if el is None:
         return None
-    text = el.get_text(" ", strip=True)
+    text = _unescape(el.get_text(" ", strip=True))
     return text or None
 
 
@@ -77,10 +95,10 @@ def parse_search_results(html: str, store_id: str) -> list[SearchResult]:
         results.append(
             SearchResult(
                 product_id=(anchor.get("data-id") or "").strip(),
-                name=(anchor.get("data-name") or "").strip(),
+                name=_unescape((anchor.get("data-name") or "").strip()),
                 price=_float_or_none(anchor.get("data-price")),
-                category=(anchor.get("data-category") or "").strip() or None,
-                brand=(anchor.get("data-brand") or "").strip() or None,
+                category=_unescape((anchor.get("data-category") or "").strip()) or None,
+                brand=_unescape((anchor.get("data-brand") or "").strip()) or None,
                 stock_text=_text_or_none(container.find("div", class_="stock")),
                 rating=None,  # loaded client-side (Bazaarvoice), not in raw HTML
                 reviews=None,  # same
@@ -90,6 +108,40 @@ def parse_search_results(html: str, store_id: str) -> list[SearchResult]:
         )
 
     return results
+
+
+def parse_search_page(html: str, store_id: str, requested_page: int) -> SearchPage:
+    """Full page: results plus pagination metadata, parsed from the page itself
+    (the "1 - 24 of 183 items" status line, the items-per-page selector, and a
+    `<link rel="next">` in <head>) rather than trusted from request params -- the
+    site can clamp an out-of-range page or an unsupported rpp value silently."""
+    soup = BeautifulSoup(html, "html.parser")
+    results = parse_search_results(html, store_id)
+
+    total_items: int | None = None
+    status_el = soup.find("p", class_="status")
+    if status_el and (m := _STATUS_RE.search(status_el.get_text(" ", strip=True))):
+        total_items = int(m.group(3).replace(",", ""))
+
+    items_per_page: int | None = None
+    ipp_el = soup.find(class_="itemsPerPage")
+    if ipp_el and (text := ipp_el.get_text(strip=True)).isdigit():
+        items_per_page = int(text)
+    elif results:
+        # Fallback: infer from this page's actual result count, when it's a full
+        # page (a short last page would under-count and skew total_pages, but
+        # that only matters once has_next is already False).
+        items_per_page = len(results)
+
+    has_next = soup.find("link", attrs={"rel": "next"}) is not None
+
+    return SearchPage(
+        results=results,
+        page=requested_page,
+        items_per_page=items_per_page,
+        total_items=total_items,
+        has_next=has_next,
+    )
 
 
 # Product pages embed state as inline JS/JSON-ish assignments, e.g.
@@ -106,7 +158,7 @@ def parse_product_page(html: str, product_id: str, store_id: str) -> ProductDeta
     soup = BeautifulSoup(html, "html.parser")
 
     title_tag = soup.find("title")
-    name = title_tag.get_text(strip=True) if title_tag else None
+    name = _unescape(title_tag.get_text(strip=True)) if title_tag else None
     if name and " - Micro Center" in name:
         name = name.rsplit(" - Micro Center", 1)[0].strip()
 

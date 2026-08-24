@@ -1,10 +1,10 @@
-"""Shared --store option for leaf commands.
+"""Shared --store/--verbose options for leaf commands.
 
-Click only accepts group-level options (`--store` on `cli`) *before* the
+Click only accepts group-level options (`--store`/`-v` on `cli`) *before* the
 subcommand name, e.g. `mcenter --store 121 search ryzen`, which surprises anyone
-used to `--store` working anywhere. Every leaf command that needs a store also
-takes its own --store, in the position people actually reach for
-(`mcenter search ryzen --store 121`), and it overrides the group-level one when
+used to flags working anywhere. Every leaf command that plausibly wants either
+also takes its own copy, in the position people actually reach for
+(`mcenter search ryzen --store 121 -v`), overriding the group-level one when
 both are given.
 """
 
@@ -25,7 +25,18 @@ def store_option(f: F) -> F:
     )(f)
 
 
+def verbose_option(f: F) -> F:
+    return click.option(
+        "-v", "--verbose", "verbose_override", is_flag=True, help="Log each request to stderr."
+    )(f)
+
+
 def resolve_store(ctx: Ctx, store_override: str | None) -> str:
     if store_override:
         ctx.store_id = store_override
     return ctx.resolve_store()
+
+
+def apply_verbose(ctx: Ctx, verbose_override: bool) -> None:
+    if verbose_override:
+        ctx.config.verbose = True

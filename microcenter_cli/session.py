@@ -13,6 +13,7 @@ subsequent plain-HTTP requests until it expires or gets invalidated.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import subprocess
 import time
@@ -84,7 +85,13 @@ def load() -> Session:
 
 
 def save(session: Session) -> None:
+    """Writes the session (including a live cf_clearance cookie -- functionally a
+    bearer credential for your Micro Center session) with owner-only permissions,
+    set *before* the cookie data is written so there's no window where it's
+    world-readable."""
     SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SESSION_FILE.touch(mode=0o600, exist_ok=True)
+    os.chmod(SESSION_FILE, 0o600)
     SESSION_FILE.write_text(json.dumps(asdict(session), indent=2))
 
 
