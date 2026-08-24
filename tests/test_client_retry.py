@@ -43,7 +43,7 @@ def test_succeeds_first_try(client, monkeypatch):
     monkeypatch.setattr(
         client_module.curl_requests, "get", lambda *a, **kw: calls.append(1) or FakeResponse(200)
     )
-    resp = client._request("http://x", "121")
+    resp = client._request("https://www.microcenter.com/x", "121")
     assert resp.status_code == 200
     assert len(calls) == 1
 
@@ -58,7 +58,7 @@ def test_retries_transient_network_error_then_succeeds(client, monkeypatch):
         return FakeResponse(200)
 
     monkeypatch.setattr(client_module.curl_requests, "get", fake_get)
-    resp = client._request("http://x", "121")
+    resp = client._request("https://www.microcenter.com/x", "121")
     assert resp.status_code == 200
     assert attempts["n"] == 2
 
@@ -69,7 +69,7 @@ def test_gives_up_after_max_retries(client, monkeypatch):
 
     monkeypatch.setattr(client_module.curl_requests, "get", fake_get)
     with pytest.raises(MicroCenterError):
-        client._request("http://x", "121")
+        client._request("https://www.microcenter.com/x", "121")
 
 
 def test_retries_5xx_then_succeeds(client, monkeypatch):
@@ -80,7 +80,7 @@ def test_retries_5xx_then_succeeds(client, monkeypatch):
         return FakeResponse(500) if attempts["n"] < 2 else FakeResponse(200)
 
     monkeypatch.setattr(client_module.curl_requests, "get", fake_get)
-    resp = client._request("http://x", "121")
+    resp = client._request("https://www.microcenter.com/x", "121")
     assert resp.status_code == 200
     assert attempts["n"] == 2
 
@@ -91,7 +91,7 @@ def test_403_is_not_retried(client, monkeypatch):
         client_module.curl_requests, "get", lambda *a, **kw: calls.append(1) or FakeResponse(403)
     )
     with pytest.raises(MicroCenterBlockedError):
-        client._get("http://x", "121")
+        client._get("https://www.microcenter.com/x", "121")
     assert len(calls) == 1  # no retry burned against a dead session
 
 
@@ -99,3 +99,29 @@ def test_no_session_raises_immediately(monkeypatch):
     monkeypatch.setattr(session_module, "load", lambda: session_module.Session())
     with pytest.raises(MicroCenterBlockedError):
         MicroCenterClient(Config())
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example.com/",
+        "https://microcenter.com.evil.example.com/",  # suffix-match bypass attempt
+        "https://not-microcenter.com/",
+    ],
+)
+def test_refuses_to_send_cookie_to_other_hosts(client, monkeypatch, url):
+    calls = []
+    monkeypatch.setattr(
+        client_module.curl_requests, "get", lambda *a, **kw: calls.append(1) or FakeResponse(200)
+    )
+    with pytest.raises(MicroCenterError, match="refusing to send the session cookie"):
+        client._request(url, "121")
+    assert len(calls) == 0  # never even attempted the request
+
+
+def test_allows_microcenter_subdomains(client, monkeypatch):
+    monkeypatch.setattr(
+        client_module.curl_requests, "get", lambda *a, **kw: FakeResponse(200)
+    )
+    resp = client._request("https://www.microcenter.com/x", "121")
+    assert resp.status_code == 200
