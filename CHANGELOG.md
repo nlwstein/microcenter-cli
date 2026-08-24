@@ -1,6 +1,49 @@
 # CHANGELOG
 
 
+## v0.2.2 (2026-08-24)
+
+### Bug Fixes
+
+- Mcenter-mcp crashed with a raw traceback without the mcp extra
+  ([`029c115`](https://github.com/nlwstein/microcenter-cli/commit/029c1157dc15dc1b2194580c0b4d547f9987428f))
+
+Found live, testing the actual PyPI-installed package: `mcenter-mcp` is registered in
+  [project.scripts] unconditionally (entry points can't be conditional on an optional dependency),
+  so `uv tool install microcenter-cli` without `.[mcp]` still creates the mcenter-mcp shim --
+  running it crashed with ModuleNotFoundError: No module named 'mcp'.
+
+Added mcp_entry.py: a wrapper with zero dependency on `mcp` itself that the console script now
+  points at instead of mcp_server:main directly. It tries the real import inside a try/except and
+  prints a clear "install the extra" message instead of a traceback when it's missing.
+
+Verified both paths from real fresh installs (not just unit tests): without the extra -> clean
+  error, exit 1; with it -> mcenter-mcp starts normally.
+
+62 tests passing (was 61).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
+- Mcenter-mcp crashed with a raw traceback without the mcp extra
+  ([`62f00ee`](https://github.com/nlwstein/microcenter-cli/commit/62f00eea3ac76fb0b9be2b9633f7a00960fcf9ea))
+
+Found live, testing the actual PyPI-installed package: `mcenter-mcp` is registered in
+  [project.scripts] unconditionally (entry points can't be conditional on an optional dependency),
+  so `uv tool install microcenter-cli` without `.[mcp]` still creates the mcenter-mcp shim --
+  running it crashed with ModuleNotFoundError: No module named 'mcp'.
+
+Added mcp_entry.py: a wrapper with zero dependency on `mcp` itself that the console script now
+  points at instead of mcp_server:main directly. It tries the real import inside a try/except and
+  prints a clear "install the extra" message instead of a traceback when it's missing.
+
+Verified both paths from real fresh installs (not just unit tests): without the extra -> clean
+  error, exit 1; with it -> mcenter-mcp starts normally.
+
+62 tests passing (was 61).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
+
 ## v0.2.1 (2026-08-24)
 
 ### Bug Fixes
