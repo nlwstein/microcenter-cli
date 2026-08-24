@@ -1,0 +1,19 @@
+stages:
+  - test
+
+variables:
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+
+cache:
+  paths:
+    - .uv-cache/
+
+test:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - pip install -q uv
+    - uv pip install --system -e . ruff pytest
+  script:
+    - ruff check microcenter_cli/
+    - pytest -q

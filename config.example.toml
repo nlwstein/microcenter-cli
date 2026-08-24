@@ -1,0 +1,8 @@
+# Copy to the path shown by `python3 -c "from platformdirs import user_config_dir;
+# print(user_config_dir('microcenter-cli'))"` as config.toml. All fields optional;
+# MICROCENTER_STORE / MICROCENTER_SESSION_TTL / MICROCENTER_HEADLESS env vars,
+# and --store, override these.
+
+default_store = "121"          # MA - Cambridge; see `mcenter stores list`
+session_ttl_seconds = 1200     # re-bootstrap the Cloudflare session after this long
+headless_bootstrap = true      # set false to watch the browser solve the challenge
