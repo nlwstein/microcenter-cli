@@ -13,6 +13,10 @@ jobs:
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-      - run: uv pip install --system -e ".[mcp]" ruff pytest
-      - run: ruff check microcenter_cli/ tests/
-      - run: pytest -q
+      # Ubuntu's system Python is PEP 668 "externally managed" -- unlike the
+      # python:3.12-slim image .gitlab-ci.yml uses, --system install refuses
+      # here. Use a real uv-managed venv instead.
+      - run: uv venv --python 3.12
+      - run: uv pip install -e ".[mcp]" ruff pytest
+      - run: uv run ruff check microcenter_cli/ tests/
+      - run: uv run pytest -q
