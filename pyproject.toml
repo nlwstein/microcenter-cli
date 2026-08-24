@@ -34,3 +34,18 @@ packages = ["microcenter_cli"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["microcenter_cli/__init__.py:__version__"]
+build_command = "pip install -q build && python -m build"
+tag_format = "v{version}"
+commit_parser = "conventional"  # feat: -> minor, fix:/perf: -> patch, `!`/BREAKING CHANGE -> major
+# Matches the conventional-commit style already used in this repo's history --
+# docs:/chore:/test:/ci:/refactor: intentionally do NOT trigger a release, only
+# feat/fix/perf/breaking changes do. A baseline `v0.2.0` tag was set when this
+# was adopted so version computation starts from there, not the entire
+# pre-existing commit history.
+
+[tool.semantic_release.branches.main]
+match = "main"
