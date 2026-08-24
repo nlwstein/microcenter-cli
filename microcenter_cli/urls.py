@@ -13,8 +13,8 @@ def search_url(query: str, store_id: str, page: int = 1, category_n: str | None 
 
 
 def product_url(product_id: str) -> str:
-    # Unverified: assumed (common ecommerce pattern) that Micro Center 301s a
-    # bare /product/<id>/ to the canonical slugged URL. Recalibrate with
-    # `mcenter debug fetch` against a real product id if this turns out wrong —
-    # the client already follows redirects either way.
-    return f"https://www.microcenter.com/product/{product_id}/"
+    # Verified against a real product page (mcenter debug fetch): Micro Center
+    # serves the page for /product/<id>/<anything>, matching by id alone and
+    # ignoring the slug text -- but a bare /product/<id>/ with no slug segment at
+    # all 404s. So a throwaway slug segment is required, not optional.
+    return f"https://www.microcenter.com/product/{product_id}/product"

@@ -1,12 +1,42 @@
 """HTML parsing for search/category listing pages and product detail pages.
 
-Selectors below are transcribed from a known-good historical scraper
-(github.com/justingee193/microcenter-scraper) plus the JS-var extraction pattern
-documented by the Level1Techs "Automated Microcenter stock checking" thread.
-Micro Center is a live commercial site — these WILL drift over time. If parsing
-starts coming back empty, use `mcenter debug fetch <url> --out page.html` to
-capture real HTML and recalibrate the selectors here; nothing else in the
-library needs to change.
+Selectors calibrated 2026-08 against real captured pages (via `mcenter debug
+fetch`), replacing an earlier best-guess based on a years-old scraper whose
+selectors had drifted (it assumed the anchor with the data-id/data-name/etc.
+attributes was the *first* `<a>` in a `div.detail_wrapper`, and that stock/price
+lived inside that same div -- neither is true anymore).
+
+Current per-product-tile shape on a search/category page:
+
+    <div class="result_right">
+      <div class="details">
+        <div class="detail_wrapper">
+          <p class="sku">SKU: 815944</p>
+          ...
+          <div class="h2">
+            <a class="productClickItemV2 ..." data-id="691349" data-name="..."
+               data-price="549.99" data-brand="AMD" data-category="..."
+               href="/product/691349/...">...</a>
+          </div>
+        </div>
+        <div class="price_wrapper">          <!-- sibling of detail_wrapper, not a child -->
+          <div class="stock">
+            <span class="inventoryCnt">25 <span class="msgInStock">IN STOCK</span></span>
+            <span class="storeName"> at Cambridge Store</span>
+          </div>
+          <div class="price">...<span itemprop="price">...$549.99</span></div>
+        </div>
+      </div>
+    </div>
+
+`div.result_right` is the reliable per-tile container (one per product, matches
+result count); `div.detail_wrapper` alone is not, since it doesn't include price/
+stock. Ratings/review counts are loaded client-side via a Bazaarvoice widget and
+are not present in the raw HTML at all, so those fields are best-effort/usually
+None.
+
+If this drifts again: `mcenter debug fetch <url> --out page.html`, then diff
+against the shape above.
 """
 
 from __future__ import annotations
@@ -28,18 +58,21 @@ def _float_or_none(text: str | None) -> float | None:
         return None
 
 
+def _text_or_none(el) -> str | None:
+    if el is None:
+        return None
+    text = el.get_text(" ", strip=True)
+    return text or None
+
+
 def parse_search_results(html: str, store_id: str) -> list[SearchResult]:
     soup = BeautifulSoup(html, "html.parser")
     results: list[SearchResult] = []
 
-    for container in soup.find_all("div", class_="detail_wrapper"):
-        anchor = container.find("a")
+    for container in soup.find_all("div", class_="result_right"):
+        anchor = container.find("a", attrs={"data-id": True})
         if anchor is None:
             continue
-
-        stock_el = container.find("div", class_="stock")
-        rating_el = container.find("div", class_="ratingstars")
-        offer_el = container.find("div", class_="highlight")
 
         results.append(
             SearchResult(
@@ -48,14 +81,10 @@ def parse_search_results(html: str, store_id: str) -> list[SearchResult]:
                 price=_float_or_none(anchor.get("data-price")),
                 category=(anchor.get("data-category") or "").strip() or None,
                 brand=(anchor.get("data-brand") or "").strip() or None,
-                stock_text=stock_el.get_text(strip=True) if stock_el else None,
-                rating=(rating_el.find("img") or {}).get("alt")
-                if rating_el and rating_el.find("img")
-                else None,
-                reviews=rating_el.find("span").get_text(strip=True)
-                if rating_el and rating_el.find("span")
-                else None,
-                offer=offer_el.get_text(strip=True) if offer_el else None,
+                stock_text=_text_or_none(container.find("div", class_="stock")),
+                rating=None,  # loaded client-side (Bazaarvoice), not in raw HTML
+                reviews=None,  # same
+                offer=_text_or_none(container.find("div", class_="highlight")),
                 store_id=store_id,
             )
         )
@@ -63,11 +92,11 @@ def parse_search_results(html: str, store_id: str) -> list[SearchResult]:
     return results
 
 
-# Product pages embed state as inline JS assignments rather than a JSON blob, e.g.
-# `var inStock = true;` / `'inStock':'True'` / `productPrice = 329.99;` depending on
-# the page template in use. Match loosely across quote styles and separators.
+# Product pages embed state as inline JS/JSON-ish assignments, e.g.
+# `'inStock':'True'` / `"productPrice":"549.99"` / `"sku": "815944"`. Match loosely
+# across quote styles and separators since these vary by field.
 _VAR_PATTERNS = {
-    "in_stock": re.compile(r"""inStock['"]?\s*[:=]\s*['"]?(true|false|True|False)""", re.IGNORECASE),
+    "in_stock": re.compile(r"""inStock['"]?\s*[:=]\s*['"]?(true|false)""", re.IGNORECASE),
     "price": re.compile(r"""productPrice['"]?\s*[:=]\s*['"]?([\d]+\.?[\d]*)"""),
     "sku": re.compile(r"""(?:sku|productSKU)['"]?\s*[:=]\s*['"]([A-Za-z0-9\-]+)['"]"""),
 }
@@ -78,8 +107,8 @@ def parse_product_page(html: str, product_id: str, store_id: str) -> ProductDeta
 
     title_tag = soup.find("title")
     name = title_tag.get_text(strip=True) if title_tag else None
-    if name and " | Micro Center" in name:
-        name = name.split(" | Micro Center")[0].strip()
+    if name and " - Micro Center" in name:
+        name = name.rsplit(" - Micro Center", 1)[0].strip()
 
     in_stock: bool | None = None
     if m := _VAR_PATTERNS["in_stock"].search(html):
