@@ -101,6 +101,19 @@ there's nothing to recalibrate against without more exploration of the category-
 UI specifically. See README's "Known limitations" — this was tried once, confirmed
 wrong (returned laptops for a CPU category), and removed rather than shipped broken.
 
+## README demo GIF
+
+`docs/demo.gif` (embedded in the README's Quick start) is generated from
+`docs/demo.tape` via [VHS](https://github.com/charmbracelet/vhs)
+(`brew install vhs`, then `vhs docs/demo.tape` from the repo root). It's a real
+recording against live microcenter.com data, not staged output — requires a
+working session first (`mcenter session status`). If product ids in the tape
+start 404ing or the demo search stops returning a clean, short result set
+(Micro Center's live inventory changes), re-verify each command manually before
+re-recording, the same way it was built originally: run every line for real,
+pick a product id from actual current results, don't reuse stale ids from a
+previous recording session.
+
 ## Testing conventions
 
 All tests are pure/offline — synthetic HTML fixtures for the parser, monkeypatched

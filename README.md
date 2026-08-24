@@ -7,6 +7,26 @@ Verified end-to-end against live microcenter.com data, not just synthetic fixtur
 
 Free and open source, no paid tier, no account, no gated features.
 
+## Quick start
+
+```bash
+uv tool install microcenter-cli    # pip install microcenter-cli also works
+
+mcenter session interactive        # one-time: solve the Cloudflare checkbox
+                                    # in your real browser (see below for why)
+
+mcenter stores find cambridge      # -> 121 (or whatever's near you)
+mcenter search "rtx 5090" --store 121 --sort price-low --in-stock-only
+mcenter product <id> --store 121   # authoritative price/stock for one item
+```
+
+![Demo: mcenter --help, session status, a live sorted/filtered search, and a
+product lookup, all against real Micro Center data](docs/demo.gif)
+
+*(That recording starts from an already-set-up session — `session interactive`
+itself needs a real click in a real browser and can't be scripted into a demo; see
+[Why this needs a manual step](#why-this-needs-a-manual-step-and-always-will).)*
+
 ## Agent / MCP support
 
 The flagship use case here is **agentic querying** — an agent comparing prices,
