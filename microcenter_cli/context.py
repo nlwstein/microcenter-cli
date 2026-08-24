@@ -47,5 +47,8 @@ class Ctx:
         return MicroCenterClient(self.config)
 
 
-class ClickUsageError(RuntimeError):
-    pass
+class ClickUsageError(click.UsageError):
+    """A plain click.UsageError, not a homegrown one -- Click's own standalone-mode
+    invocation already catches UsageError, prints it cleanly, and exits with the
+    right code, both for the real `mcenter` entry point and under CliRunner in
+    tests. No need to duplicate that handling in cli.py's main()."""

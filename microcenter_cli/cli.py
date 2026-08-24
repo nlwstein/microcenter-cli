@@ -10,7 +10,7 @@ from curl_cffi.requests import RequestsError
 from . import __version__
 from .client import MicroCenterBlockedError, MicroCenterError
 from .config import ConfigError, load_config
-from .context import ClickUsageError, Ctx
+from .context import Ctx
 
 
 @click.group()
@@ -41,12 +41,16 @@ cli.add_command(_debug.debug)
 
 
 def main() -> None:
-    """Console-script entry point with friendly error handling."""
+    """Console-script entry point with friendly error handling.
+
+    click.UsageError (and thus context.ClickUsageError) is deliberately NOT
+    caught here -- Click's own standalone-mode invocation (the default for
+    calling `cli()` directly, same as under CliRunner in tests) already catches
+    it, prints it, and exits with the right code before it would ever reach
+    this try/except.
+    """
     try:
         cli()
-    except ClickUsageError as exc:
-        click.secho(f"error: {exc}", fg="red", err=True)
-        sys.exit(1)
     except ConfigError as exc:
         click.secho(f"error: {exc}", fg="red", err=True)
         sys.exit(1)
