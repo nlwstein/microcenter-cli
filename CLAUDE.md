@@ -109,8 +109,23 @@ All tests are pure/offline — synthetic HTML fixtures for the parser, monkeypat
 depends on a live session existing. Keep it that way; a test suite that needs a real
 Micro Center session to pass isn't one CI can run.
 
-## Version
+## Version / release
 
-Bump `pyproject.toml`'s `version` and `microcenter_cli/__init__.py`'s `__version__`
-together on notable changes (they're currently both `0.2.0` — search/product/stores/
-session commands, pagination, retries/rate-limiting, browser-aware session capture).
+Versioning is automated: `python-semantic-release` (config in `pyproject.toml`)
+computes the bump from conventional commits and updates `pyproject.toml` +
+`microcenter_cli/__init__.py` itself. Don't hand-edit either version field anymore.
+
+**Two remotes, one release pipeline.** `origin` is GitLab (git.nlws.io, where
+`.gitlab-ci.yml` runs tests) and `github` is https://github.com/nlwstein/microcenter-cli
+(where `.github/workflows/release.yml` actually runs semantic-release + PyPI
+publish — GitLab has no release workflow). A real `feat:`/`fix:` push makes
+semantic-release commit a version bump **back to GitHub only**, so `github/main`
+and `origin/main` diverge the moment that happens. This bit us once already: a
+follow-up push to `origin` succeeded, then the equivalent push to `github` was
+rejected as non-fast-forward.
+
+The fix, every time this happens: `git fetch github main && git merge github/main`
+(a merge, not a rebase — `origin` may already have work pushed there too, and
+rewriting history that's already been pushed is off the table). Then push the
+merge commit to both remotes. Cheaper to just always `git fetch github main`
+before pushing anything, if a release may have happened since your last push.
