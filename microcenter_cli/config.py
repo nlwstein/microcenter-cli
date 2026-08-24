@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,10 @@ from platformdirs import user_config_dir
 CONFIG_DIR = Path(user_config_dir("microcenter-cli"))
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 SESSION_FILE = CONFIG_DIR / "session.json"
+
+
+class ConfigError(RuntimeError):
+    pass
 
 
 @dataclass
@@ -36,11 +41,39 @@ class Config:
     verbose: bool = False
 
 
+# (field name, minimum allowed value) -- anything below this is almost certainly a
+# typo (e.g. request_timeout_seconds = 0) that would otherwise fail confusingly deep
+# inside curl_cffi rather than with a message that points at the actual config field.
+_MINIMUMS: dict[str, float] = {
+    "session_ttl_seconds": 0,
+    "request_timeout_seconds": 1.0,
+    "max_retries": 1,
+    "retry_backoff_seconds": 0.0,
+    "min_request_interval_seconds": 0.0,
+}
+
+
+def _clamp(cfg: Config) -> None:
+    for field_name, minimum in _MINIMUMS.items():
+        value = getattr(cfg, field_name)
+        if value < minimum:
+            print(
+                f"[mcenter] warning: config '{field_name}' = {value} is below the "
+                f"sane minimum ({minimum}); using {minimum} instead.",
+                file=sys.stderr,
+            )
+            setattr(cfg, field_name, minimum if isinstance(value, float) else int(minimum))
+
+
 def load_config() -> Config:
     cfg = Config()
 
     if CONFIG_FILE.exists():
-        data = tomllib.loads(CONFIG_FILE.read_text())
+        try:
+            data = tomllib.loads(CONFIG_FILE.read_text())
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"couldn't parse {CONFIG_FILE}: {exc}") from exc
+
         cfg.default_store = data.get("default_store", cfg.default_store)
         cfg.session_ttl_seconds = data.get("session_ttl_seconds", cfg.session_ttl_seconds)
         cfg.request_timeout_seconds = data.get(
@@ -61,4 +94,5 @@ def load_config() -> Config:
     if v := os.environ.get("MICROCENTER_VERBOSE"):
         cfg.verbose = v not in ("0", "false", "False")
 
+    _clamp(cfg)
     return cfg

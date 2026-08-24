@@ -9,7 +9,7 @@ from curl_cffi.requests import RequestsError
 
 from . import __version__
 from .client import MicroCenterBlockedError, MicroCenterError
-from .config import load_config
+from .config import ConfigError, load_config
 from .context import ClickUsageError, Ctx
 
 
@@ -45,6 +45,9 @@ def main() -> None:
     try:
         cli()
     except ClickUsageError as exc:
+        click.secho(f"error: {exc}", fg="red", err=True)
+        sys.exit(1)
+    except ConfigError as exc:
         click.secho(f"error: {exc}", fg="red", err=True)
         sys.exit(1)
     except MicroCenterBlockedError as exc:
