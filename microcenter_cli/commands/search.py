@@ -7,24 +7,33 @@ from rich.console import Console
 from rich.table import Table
 
 from ..context import Ctx
+from ..options import resolve_store, store_option
 
 console = Console()
 
 
 @click.command()
 @click.argument("query")
+@store_option
 @click.option("--page", default=1, show_default=True, help="Result page number.")
 @click.option("--category", "category_n", help="Micro Center category N= facet value.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
 @click.pass_obj
-def search(ctx: Ctx, query: str, page: int, category_n: str | None, as_json: bool) -> None:
+def search(
+    ctx: Ctx,
+    query: str,
+    store_override: str | None,
+    page: int,
+    category_n: str | None,
+    as_json: bool,
+) -> None:
     """Search the catalog and list matching products with price/stock at --store.
 
     This is the catalog drill-down entry point: pipe --json output to a second
     `mcenter product <id>` call (or your own logic) to inspect a specific hit
     further.
     """
-    store = ctx.resolve_store()
+    store = resolve_store(ctx, store_override)
     results = ctx.client().search(query, store, page=page, category_n=category_n)
 
     if as_json:

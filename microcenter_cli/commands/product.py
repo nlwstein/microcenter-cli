@@ -6,17 +6,19 @@ import click
 from rich.console import Console
 
 from ..context import Ctx
+from ..options import resolve_store, store_option
 
 console = Console()
 
 
 @click.command()
 @click.argument("product_id")
+@store_option
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a summary.")
 @click.pass_obj
-def product(ctx: Ctx, product_id: str, as_json: bool) -> None:
+def product(ctx: Ctx, product_id: str, store_override: str | None, as_json: bool) -> None:
     """Look up exact price + in-stock status for one product id at --store."""
-    store = ctx.resolve_store()
+    store = resolve_store(ctx, store_override)
     detail = ctx.client().product(product_id, store)
 
     if as_json:
