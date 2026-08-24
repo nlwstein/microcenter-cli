@@ -15,8 +15,9 @@ mcenter <anything>                # once installed editable, live in .venv/bin/m
 
 CI (`.gitlab-ci.yml`) runs exactly `ruff check` + `pytest` on `python:3.12-slim`.
 Always run both locally before pushing, and check the pipeline actually went green
-(`mcp__gitlab__list_commit_statuses` or the GitLab UI) — don't assume from a clean
-local run alone, this repo has had lint-only failures pass tests but fail CI before.
+(`mcp__gitlab__list_commit_statuses` or the GitLab UI) rather than assuming from a
+clean local run alone — CI runs in a different environment (fresh venv, different
+Python patch version) than whatever's already installed locally.
 
 ## Architecture, briefly
 
