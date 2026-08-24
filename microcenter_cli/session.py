@@ -1,11 +1,13 @@
 """On-disk cache of a Cloudflare-cleared session (cookies + matching User-Agent).
 
-microcenter.com sits behind Cloudflare managed challenge (see README for the full
-story: plain HTTP and even TLS-impersonated HTTP get a 403 with `cf-mitigated:
-challenge`). The only thing that reliably clears it is a real browser JS
-environment. So we pay that cost once (bootstrap.py, Playwright), cache the
-resulting cookies here, and reuse them for many subsequent plain-HTTP requests
-until they expire or get invalidated.
+microcenter.com sits behind a Cloudflare Turnstile challenge that is an actual
+"verify you are human" checkbox (see README) — and Cloudflare detects and rejects
+solves that come from an automation-controlled browser (Playwright/Puppeteer/CDP),
+regardless of whether a real click is dispatched. So there is no automatable
+bootstrap for this: a human has to solve it once in their own, un-automated
+browser, and hand the resulting cookie to this tool (`mcenter session import`).
+This module just caches whatever session was imported and reuses it for many
+subsequent plain-HTTP requests until it expires or gets invalidated.
 """
 
 from __future__ import annotations
@@ -48,3 +50,16 @@ def save(session: Session) -> None:
 def clear() -> None:
     if SESSION_FILE.exists():
         SESSION_FILE.unlink()
+
+
+def parse_cookie_header(header: str) -> dict[str, str]:
+    """Parse a raw `Cookie: a=1; b=2` header value, as copy-pasted from browser
+    devtools (Network tab -> a request -> Request Headers -> Cookie), into a dict."""
+    cookies: dict[str, str] = {}
+    for part in header.split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        cookies[key.strip()] = value.strip()
+    return cookies

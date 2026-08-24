@@ -45,12 +45,6 @@ def main() -> None:
         sys.exit(1)
     except MicroCenterBlockedError as exc:
         click.secho(f"error: {exc}", fg="red", err=True)
-        click.secho(
-            "hint: run `mcenter session bootstrap --no-headless` to watch what "
-            "Cloudflare is doing.",
-            fg="yellow",
-            err=True,
-        )
         sys.exit(1)
     except MicroCenterError as exc:
         click.secho(f"error: {exc}", fg="red", err=True)

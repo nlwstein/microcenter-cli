@@ -17,8 +17,11 @@ SESSION_FILE = CONFIG_DIR / "session.json"
 @dataclass
 class Config:
     default_store: str | None = None
-    session_ttl_seconds: int = 1200  # re-bootstrap the CF session after this long
-    headless_bootstrap: bool = True
+    # Purely informational staleness threshold shown by `session status` — an
+    # imported session isn't proactively refreshed (nothing can do that
+    # automatically, see session.py), it's just flagged as possibly-stale past
+    # this age so you know to check whether `mcenter session import` is needed.
+    session_ttl_seconds: int = 1200
 
 
 def load_config() -> Config:
@@ -28,13 +31,10 @@ def load_config() -> Config:
         data = tomllib.loads(CONFIG_FILE.read_text())
         cfg.default_store = data.get("default_store", cfg.default_store)
         cfg.session_ttl_seconds = data.get("session_ttl_seconds", cfg.session_ttl_seconds)
-        cfg.headless_bootstrap = data.get("headless_bootstrap", cfg.headless_bootstrap)
 
     if v := os.environ.get("MICROCENTER_STORE"):
         cfg.default_store = v
     if v := os.environ.get("MICROCENTER_SESSION_TTL"):
         cfg.session_ttl_seconds = int(v)
-    if v := os.environ.get("MICROCENTER_HEADLESS"):
-        cfg.headless_bootstrap = v not in ("0", "false", "False")
 
     return cfg

@@ -6,36 +6,36 @@ from . import parser, session, urls
 from .config import Config
 from .models import ProductDetail, SearchResult
 
+IMPORT_HINT = (
+    "no valid session. Solve the checkbox by hand in a real browser and run "
+    "`mcenter session import` (see `mcenter session status` for the exact steps)."
+)
+
 
 class MicroCenterError(RuntimeError):
     pass
 
 
 class MicroCenterBlockedError(MicroCenterError):
-    """Cloudflare challenged us even after a fresh bootstrap."""
+    """Cloudflare challenged us — no cached session, or it's been invalidated."""
 
 
 class MicroCenterClient:
-    """Plain-HTTP client (TLS-impersonated via curl_cffi) that reuses a cached,
-    browser-bootstrapped Cloudflare session. Bootstraps automatically on cold
-    start or when the cached session goes stale/gets invalidated — that's the
-    only time a browser process gets spawned.
+    """Plain-HTTP client (TLS-impersonated via curl_cffi) that reuses a session
+    cookie imported from a real, human-solved browser session (see
+    `mcenter session import`). Micro Center's Turnstile checkbox rejects any
+    automation-controlled browser outright, so nothing in this library can solve
+    it itself — it can only detect when the imported session has gone stale and
+    say so clearly.
     """
 
     def __init__(self, config: Config):
         self.config = config
         self._session = session.load()
+        if not self._session.cookies:
+            raise MicroCenterBlockedError(IMPORT_HINT)
 
-    def _ensure_session(self, *, force: bool = False) -> None:
-        if not force and self._session.is_fresh(self.config.session_ttl_seconds):
-            return
-        from . import bootstrap  # deferred: keeps playwright off the import path
-
-        self._session = bootstrap.bootstrap(headless=self.config.headless_bootstrap)
-        session.save(self._session)
-
-    def _get(self, url: str, store_id: str, *, _retried: bool = False) -> str:
-        self._ensure_session()
+    def _get(self, url: str, store_id: str) -> str:
         cookies = {**self._session.cookies, "storeSelected": store_id}
         headers = {
             "User-Agent": self._session.user_agent or "Mozilla/5.0",
@@ -47,12 +47,10 @@ class MicroCenterClient:
         )
 
         if resp.status_code == 403 or parser.looks_like_challenge_page(resp.text):
-            if _retried:
-                raise MicroCenterBlockedError(
-                    f"still challenged after a fresh session bootstrap ({url})"
-                )
-            self._ensure_session(force=True)
-            return self._get(url, store_id, _retried=True)
+            raise MicroCenterBlockedError(
+                f"session was rejected fetching {url} — it's likely expired/invalidated. "
+                + IMPORT_HINT
+            )
 
         resp.raise_for_status()
         return resp.text
